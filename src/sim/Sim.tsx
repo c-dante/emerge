@@ -1,15 +1,23 @@
 import React from 'react';
-import produce, { current } from 'immer';
-import type { Draft } from 'immer';
+import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
 
 // Helper type for a maybe-define for thing types
 export type ThingHas<T> = Partial<Record<ThingType, T>>;
 
+const getRes = (thing: Thing, resType: ThingType) => thing.resources[resType] ?? 0;
+const mathRes = (thing: Thing, resType: ThingType, value: number) => {
+	const newValue = getRes(thing, resType) + value;
+	thing.resources[resType] = newValue;
+	return newValue;
+}
+
 /**
  * Our simulation has a tick (current time) and things
  *
  * Things are organized into a 2D k-d tree (for now) with a collection of things to allow overlapping points
+ *
+ * There's a graph of connections between things as well for resource sharing / related components
 */
 export type SimState = {
 	things: KdTreeMap<number[], Thing[]>,
@@ -29,6 +37,9 @@ export type Thing = {
 export enum ThingType {
 	Water = 'Water',
 	Seed = 'Seed',
+	Root = 'Root',
+	Cloud = 'Cloud',
+	RainCloud = 'RainCloud',
 };
 
 // Helpers for working with the stacked kd map
@@ -53,33 +64,74 @@ const removeThing = (thing: Thing, things: SimState['things']) => {
 }
 
 
-export type Control = (self: Thing, draft: Draft<SimState>, delta: number) => void;
+export type Control = (self: Thing, state: SimState, delta: number) => void;
 
 // -------- Controls
-const absorbWater: Control = (self: Thing, draft: Draft<SimState>, delta: number) => {
-	const state = current(draft) as SimState;
-	const nearestWater = state.things.queryValues(self.pos, 2)
+const absorbWater: Control = (self: Thing, state: SimState) => {
+	const DISTANCE = 2;
+	const MAX_CELLS = (DISTANCE - 1) * 9;
+	const nearestWater = state.things.queryValues(self.pos, 2, MAX_CELLS)
 		.flat()
 		.find(x => x.type === ThingType.Water);
 
 	if (nearestWater) {
 		removeThing(nearestWater, state.things);
-		self.resources[ThingType.Water] = (self.resources?.[ThingType.Water] ?? 0) + 1
+		mathRes(self, ThingType.Water, 1);
+	}
+};
+
+const rootDown: Control = (self: Thing, state: SimState) => {
+	if (getRes(self, ThingType.Water) > 2) {
+		const newRoot = root();
+		newRoot.pos[0] = self.pos[0];
+		newRoot.pos[1] = self.pos[1] + 1; // down 1
+		addThing(newRoot, state.things);
+		mathRes(self, ThingType.Water, -2);
+	}
+};
+
+const condenseWater: Control = (self: Thing, state: SimState) => {
+	// Gather water
+	if (state.tick % 3 === 0) {
+		mathRes(self, ThingType.Water, 5);
+	}
+
+
+	// Become a rain cloud
+	if (getRes(self, ThingType.Water) > 10) {
+		self.type = ThingType.RainCloud;
+	}
+};
+
+const rain: Control = (self: Thing, state: SimState) => {
+	let maxDrops = 4;
+	while (maxDrops > 0 && getRes(self, ThingType.Water) > 0) {
+		const newWater = water();
+		newWater.pos[0] = self.pos[0];
+		newWater.pos[1] = self.pos[1];
+		addThing(newWater, state.things);
+		mathRes(self, ThingType.Water, -1);
+		maxDrops--;
+	}
+
+	// Become a cloud again
+	if (self.resources[ThingType.Water] === 0) {
+		self.type = ThingType.Cloud;
 	}
 };
 
 export const FixedControls: ThingHas<Control[]> = {
-	[ThingType.Seed]: [absorbWater],
+	[ThingType.Seed]: [absorbWater, rootDown],
+	[ThingType.Root]: [absorbWater],
+	[ThingType.Cloud]: [condenseWater],
+	[ThingType.RainCloud]: [rain],
 };
 
 // --------------------- Things
-
-
 const baseThing = () => ({
 	resources: {},
-	controls: [],
 	pos: [0, 0],
-})
+});
 
 const water = () => ({
 	...baseThing(),
@@ -94,7 +146,21 @@ const seed = () => ({
 	},
 });
 
-export type SimProps = {};
+const root = () => ({
+	...baseThing(),
+	type: ThingType.Root,
+});
+
+const cloud = () => ({
+	...baseThing(),
+	type: ThingType.Cloud,
+	resource: {
+		[ThingType.Water]: 0,
+	}
+});
+
+
+// -- Sim
 export type SerializedSimState = string;
 const serializeState = (state: SimState): SerializedSimState => {
 	return JSON.stringify({
@@ -114,14 +180,16 @@ const deserializeState = (serialized: string): SimState => {
 	};
 };
 
-const advanceSim = (state: SimState, delta: number): SimState => produce(state, (draftState) => {
+const advanceSim = (state: SimState, delta: number): SimState => {
 	state.tick += delta;
 	for (const [, things] of state.things) {
-		things.forEach(thing => {
-			(FixedControls[thing.type] ?? []).forEach((ctrl) => ctrl(thing, draftState, delta));
-		})
+		// Randomly shuffle the things so we don't bias who goes first
+		fp.shuffle(things).forEach(thing => {
+			(FixedControls[thing.type] ?? []).forEach((ctrl) => ctrl(thing, state, delta));
+		});
 	}
-});
+	return state;
+}
 
 const emptyState = () => ({
 	things: [
@@ -130,14 +198,16 @@ const emptyState = () => ({
 		water(),
 		water(),
 		water(),
-		//
+		// A seed
 		seed(),
+		// A cloud
+		cloud(),
 	].reduce((thingMap, thing) => addThing(thing, thingMap), new KdTreeMap<number[], Thing[]>(2)),
 	tick: 0,
 });
 
 /*
--------- whatever
+-------- whatever. render and game loop
 */
 
 const DisplayThing = ({ thing }: { thing: Thing }) => (
@@ -152,6 +222,7 @@ const DisplayThing = ({ thing }: { thing: Thing }) => (
 );
 
 const STORAGE = 'SIM_STORAGE';
+export type SimProps = {};
 export class Sim extends React.Component<SimProps, SimState> {
 	interval: NodeJS.Timeout | undefined;
 
