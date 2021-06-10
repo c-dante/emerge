@@ -10,7 +10,7 @@ const mathRes = (thing: Thing, resType: ThingType, value: number) => {
 	const newValue = getRes(thing, resType) + value;
 	thing.resources[resType] = newValue;
 	return newValue;
-}
+};
 
 /**
  * Our simulation has a tick (current time) and things
@@ -51,7 +51,7 @@ const addThing = (thing: Thing, things: SimState['things']) => {
 		things.set(thing.pos, [thing]);
 	}
 	return things;
-}
+};
 const removeThing = (thing: Thing, things: SimState['things']) => {
 	const remaining = (things.get(thing.pos) ?? [])
 		.filter(x => x !== thing);
@@ -61,7 +61,7 @@ const removeThing = (thing: Thing, things: SimState['things']) => {
 		things.remove(thing.pos);
 	}
 	return things;
-}
+};
 
 
 export type Control = (self: Thing, state: SimState, delta: number) => void;
@@ -189,7 +189,7 @@ const advanceSim = (state: SimState, delta: number): SimState => {
 		});
 	}
 	return state;
-}
+};
 
 const emptyState = () => ({
 	things: [
