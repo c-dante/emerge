@@ -2,6 +2,7 @@
   "name": "emerge",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://c-dante.github.io/emerge",
   "dependencies": {
     "@testing-library/jest-dom": "^5.11.4",
     "@testing-library/react": "^11.1.0",
@@ -13,7 +14,6 @@
     "@types/react": "^17.0.0",
     "@types/react-dom": "^17.0.0",
     "chart.js": "^3.3.2",
-    "immer": "^9.0.3",
     "lodash": "^4.17.21",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
@@ -23,6 +23,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "lint": "eslint src --fix --ext .js,.jsx,.ts,.tsx",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
