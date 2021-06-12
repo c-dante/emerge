@@ -1,6 +1,7 @@
 import React from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
+import { CanvasRender } from './render';
 
 // Helper type for a maybe-define for thing types
 export type ThingHas<T> = Partial<Record<ThingType, T>>;
@@ -128,31 +129,31 @@ export const FixedControls: ThingHas<Control[]> = {
 };
 
 // --------------------- Things
-const baseThing = () => ({
+const baseThing = (pos: number[]) => ({
 	resources: {},
-	pos: [0, 0],
+	pos,
 });
 
-const water = () => ({
-	...baseThing(),
+const water = (pos: number[] = [0, 0]) => ({
+	...baseThing(pos),
 	type: ThingType.Water,
 });
 
-const seed = () => ({
-	...baseThing(),
+const seed = (pos: number[] = [0, 0]) => ({
+	...baseThing(pos),
 	type: ThingType.Seed,
 	resources: {
 		[ThingType.Water]: 0,
 	},
 });
 
-const root = () => ({
-	...baseThing(),
+const root = (pos: number[] = [0, 0]) => ({
+	...baseThing(pos),
 	type: ThingType.Root,
 });
 
-const cloud = () => ({
-	...baseThing(),
+const cloud = (pos: number[] = [0, 0]) => ({
+	...baseThing(pos),
 	type: ThingType.Cloud,
 	resource: {
 		[ThingType.Water]: 0,
@@ -210,31 +211,45 @@ const emptyState = () => ({
 -------- whatever. render and game loop
 */
 
-const DisplayThing = ({ thing }: { thing: Thing }) => (
-	<div>
-		{thing.type}
-		<ul className="thing-list">
-			{Object.keys(thing.resources).map((key) => (
-				<li key={key}>{key}: {String(thing.resources[key as ThingType])}</li>
-			))}
-		</ul>
-	</div>
-);
+// const DisplayThing = ({ thing }: { thing: Thing }) => (
+// 	<div style={{
+// 		position: 'absolute',
+// 		left: thing.pos[0] * 50,
+// 		top: thing.pos[1] * 50,
+// 	}}>
+// 		{thing.type}
+// 		<ul className="thing-list">
+// 			{Object.keys(thing.resources).map((key) => (
+// 				<li key={key}>{key}: {String(thing.resources[key as ThingType])}</li>
+// 			))}
+// 		</ul>
+// 	</div>
+// );
 
 const STORAGE = 'SIM_STORAGE';
+export type SimEltState = {
+	sim: SimState;
+	intervalRate: number;
+	canvasRect?: DOMRectReadOnly;
+}
 export type SimProps = {};
-export class Sim extends React.Component<SimProps, SimState> {
+export class Sim extends React.Component<SimProps, SimEltState> {
 	interval: NodeJS.Timeout | undefined;
 
 	constructor(initialProps: SimProps) {
 		super(initialProps);
-		this.state = emptyState();
+		this.state = {
+			sim: emptyState(),
+			intervalRate: 1000,
+		};
 
 		const saved = sessionStorage.getItem(STORAGE);
 		if (saved) {
 			try {
 				console.log(saved);
-				this.state = deserializeState(saved);
+				this.setState({
+					sim: deserializeState(saved),
+				});
 			} catch (error) {
 				console.debug(saved);
 				console.warn('Failed to load json', error);
@@ -244,13 +259,15 @@ export class Sim extends React.Component<SimProps, SimState> {
 
 	componentDidMount() {
 		this.interval = setInterval(() => {
-			const nextState = advanceSim(this.state, 1);
+			const nextState = advanceSim(this.state.sim, 1);
 
-			if (this.state.tick % 10 === 0) {
+			if (this.state.sim.tick % 10 === 0) {
 				sessionStorage.setItem(STORAGE, serializeState(nextState));
 			}
 
-			this.setState(nextState);
+			this.setState({
+				sim: { ...nextState },
+			});
 		}, 1000);
 	}
 
@@ -261,16 +278,33 @@ export class Sim extends React.Component<SimProps, SimState> {
 		}
 	}
 
+	setCanvasDims(rect: DOMRectReadOnly) {
+		this.setState({
+			canvasRect: rect,
+		});
+	}
+
 	render() {
 		return (
-			<div>
-				<p>{this.state.tick}</p>
-				{[...this.state.things.values()].flatMap((things, i) => (
-					things.map((thing, j) => (
-						<DisplayThing thing={thing} key={`${i},${j}`} />
-					))
-				))}
-				<button onClick={() => this.setState(emptyState())}>Reset</button>
+			<div className="sim-container">
+				<div className="sim-render-area">
+					<CanvasRender state={this.state.sim} onResize={dims => this.setCanvasDims(dims)} />
+					{/* {[...this.state.things.values()].flatMap((things, i) => (
+						things.map((thing, j) => (
+							<DisplayThing thing={thing} key={`${i},${j}`} />
+						))
+					))} */}
+				</div>
+
+				<div className="sim-stats-footer">
+					<p>{this.state.sim.tick}</p>
+					<button onClick={() => this.setState({ sim: emptyState()} )}>Reset</button>
+					<p>Size: {this.state.canvasRect?.width} x {this.state.canvasRect?.height}</p>
+					{/* <label>
+						interval (ms)
+						<input type='text' value={this.intervalRate} />
+					</label> */}
+				</div>
 			</div>
 		);
 	}
