@@ -100,7 +100,11 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 		this.state = initialState;
 	}
 
-	componentDidMount() {
+	configureInterval(rate: number) {
+		if (this.interval !== undefined) {
+			clearInterval(this.interval);
+		}
+
 		this.interval = setInterval(() => {
 			const nextState = advanceSim(this.state.sim, 1);
 
@@ -112,6 +116,10 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 				sim: { ...nextState },
 			});
 		}, this.state.intervalRate);
+	}
+
+	componentDidMount() {
+		this.configureInterval(this.state.intervalRate);
 	}
 
 	componentWillUnmount() {
@@ -132,6 +140,20 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 		this.setState({ renderController });
 	}
 	renderCtrlCb = this.setRenderCtrl.bind(this);
+
+	setInterval(intervalStr: string) {
+		const interval = +intervalStr;
+		if (!isNaN(interval)) {
+			const intervalRate = Math.min(
+				Math.max(10, interval),
+				10000
+			);
+			this.setState({
+				intervalRate
+			});
+			this.configureInterval(intervalRate);
+		}
+	}
 
 	render() {
 		return (
@@ -155,10 +177,10 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 					<p>Size: {this.state?.canvasRect?.width} x {this.state?.canvasRect?.height}</p>
 					<button onClick={() => this.state?.renderController?.center()}>Center</button>
 					<button onClick={() => console.log(this.state)}>Log</button>
-					{/* <label>
+					<label>
 						interval (ms)
-						<input type='text' value={this.intervalRate} />
-					</label> */}
+						<input type='text' value={this.state.intervalRate} onChange={e => this.setInterval(e.target.value)} />
+					</label>
 				</div>
 			</div>
 		);

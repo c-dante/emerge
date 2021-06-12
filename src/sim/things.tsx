@@ -68,9 +68,15 @@ export type Control = (self: Thing, state: SimState, delta: number) => void;
 const DISTANCE = 2;
 const MAX_CELLS = (DISTANCE - 1) * 9;
 const absorbWater: Control = (self: Thing, state: SimState) => {
-	const nearestWater = state.things.queryValues(self.pos, 2, MAX_CELLS)
-		.flat()
-		.find(x => x.type === ThingType.Water);
+	const nearestWater = (() => {
+		for (const things of state.things.queryValues(self.pos, 2, MAX_CELLS)) {
+			for (const thing of things) {
+				if (thing.type === ThingType.Water) {
+					return thing;
+				}
+			}
+		}
+	})();
 
 	if (nearestWater) {
 		removeThing(nearestWater, state.things);
