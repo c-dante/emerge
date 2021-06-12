@@ -4,6 +4,7 @@ import { zoom as d3zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select as d3select } from 'd3-selection';
 import { SimState, ThingType } from './things';
 import { SizedElement } from './SizedElement';
+import { Fps } from './fps';
 
 // Some shared render constants
 const PADDING = 1;
@@ -26,8 +27,9 @@ const renderToContext = (ctx: CanvasRenderingContext2D, xform: ZoomTransform, st
 	ctx?.translate(xform.x, xform.y);
 	ctx?.scale(xform.k, xform.k);
 	for (const [[x, y], things] of state.things) {
-		for (const thing of things) {
-			ctx.fillStyle = TypeToColor[thing.type];
+		const topThing = fp.sample(things);
+		if (topThing) {
+			ctx.fillStyle = TypeToColor[topThing.type];
 			ctx.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
 		}
 	}
@@ -80,6 +82,7 @@ export type RenderController = {
 }
 export type RenderProps = {
 	state: SimState;
+	fps?: Fps;
 	onResize?: (rect: DOMRectReadOnly) => void;
 	onCtrl?: (ctrl: RenderController) => void;
 }
@@ -91,6 +94,7 @@ export type RenderProps = {
 // ## Canvas render setup + interaction
 export const CanvasRender: React.FC<RenderProps> = ({
 	state,
+	fps,
 	onResize = fp.noop,
 }) => {
 	const canvas = useRef<HTMLCanvasElement>(null);
@@ -121,10 +125,12 @@ export const CanvasRender: React.FC<RenderProps> = ({
 		if (!ctx) {
 			return;
 		}
+		fps?.zero();
 		const xform = transform ?? zoomIdentity;
 		const rect = canvas.current.getBoundingClientRect();
 		renderToContext(ctx, xform, state, rect);
-	}, [state, transform]);
+		fps?.update();
+	}, [state, transform, fps]);
 
 	useEffect(() => {
 		if (canvas.current && zoom.current) {
@@ -148,6 +154,7 @@ export const CanvasRender: React.FC<RenderProps> = ({
 // ## SVG render setup + interaction
 export const SvgRender: React.FC<RenderProps> = ({
 	state,
+	fps,
 	onResize = fp.noop,
 	onCtrl = fp.noop,
 }) => {
@@ -218,10 +225,12 @@ export const SvgRender: React.FC<RenderProps> = ({
 		if (svg.current && state) {
 			const root = svg.current.getElementById('svg-root-transform');
 			if (root) {
+				fps?.zero();
 				renderToSvg(root, state);
+				fps?.update();
 			}
 		}
-	}, [state, transform]);
+	}, [state, transform, fps]);
 
 	useEffect(() => {
 		if (svg.current && zoom.current) {

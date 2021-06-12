@@ -3,6 +3,7 @@ import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
 import { RenderController, CanvasRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
+import { Fps } from './fps';
 
 // -- Sim
 export type SerializedSimState = string;
@@ -76,6 +77,9 @@ export type SimEltState = {
 	intervalRate: number;
 	canvasRect?: DOMRectReadOnly;
 	renderController?: RenderController;
+	simFps: Fps;
+	renderFps: Fps;
+	drawFps: Fps;
 }
 export type SimProps = {};
 export class Sim extends React.Component<SimProps, SimEltState> {
@@ -86,6 +90,9 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 		const initialState = {
 			sim: emptyState(),
 			intervalRate: 1000,
+			simFps: new Fps(),
+			renderFps: new Fps(),
+			drawFps: new Fps(),
 		};
 		const saved = sessionStorage.getItem(GAME_SAVE);
 		if (saved) {
@@ -106,7 +113,9 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 		}
 
 		this.interval = setInterval(() => {
+			this.state.simFps.zero();
 			const nextState = advanceSim(this.state.sim, 1);
+			this.state.simFps.update();
 
 			if (this.state.sim.tick % 10 === 0) {
 				sessionStorage.setItem(GAME_SAVE, serializeState(nextState));
@@ -115,7 +124,7 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 			this.setState({
 				sim: { ...nextState },
 			});
-		}, this.state.intervalRate);
+		}, rate);
 	}
 
 	componentDidMount() {
@@ -156,6 +165,7 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 	}
 
 	render() {
+		this.state.renderFps.update();
 		return (
 			<div className="sim-container">
 				<div className="sim-render-area">
@@ -163,11 +173,13 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 						state={this.state.sim}
 						onResize={this.setCanvasDimsCb}
 						onCtrl={this.renderCtrlCb}
+						fps={this.state.drawFps}
 					/>
 					{/* <SvgRender
 						state={this.state?.sim}
 						onResize={this.setCanvasDimsCb}
 						onCtrl={this.renderCtrlCb}
+						fps={this.state.drawFps}
 					/> */}
 				</div>
 
@@ -181,6 +193,13 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 						interval (ms)
 						<input type='text' value={this.state.intervalRate} onChange={e => this.setInterval(e.target.value)} />
 					</label>
+					<div style={{ width: '11em', overflow: 'hidden'}}>
+						<div>Render: {this.state.drawFps.rate.toFixed(0)} ms</div>
+						<div>Sim: {this.state.simFps.rate.toFixed(0)} ms</div>
+					</div>
+					<div style={{ width: '11em', overflow: 'hidden'}}>
+						<div>FPS: {Math.round(this.state.renderFps.fps)} fps</div>
+					</div>
 				</div>
 			</div>
 		);
