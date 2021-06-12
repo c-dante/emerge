@@ -3,54 +3,55 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { zoom as d3zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select as d3select } from 'd3-selection';
 import { SimState, ThingType } from './things';
+import { SizedElement } from './SizedElement';
 
+// Some shared render constants
 const PADDING = 1;
 const SCALE = 10;
 const HALF_SCALE = SCALE / 2;
 
-type SizedElementProps = {
-	onResize?: (rect: DOMRectReadOnly) => void,
-	containerProps?: object,
-};
-const SizedElement: React.FC<SizedElementProps> = ({
-	onResize = fp.noop,
-	children,
-	containerProps = {
-		style: {
-			height: '100%',
-		},
-	},
-}) => {
-	const container = useRef<HTMLDivElement>(null);
-	const localOnResize = useRef(onResize);
-	useEffect(() => {
-		localOnResize.current = onResize;
-	}, [onResize]);
-
-	const observer = useRef(new ResizeObserver(entries => {
-		if (entries.length > 0) {
-			const contentRect = entries[0].contentRect;
-			localOnResize.current(contentRect);
-		}
-	}));
-
-	useEffect(() => {
-		if (!container.current?.parentElement) {
-			return;
-		}
-
-		const obs = observer.current;
-		obs.observe(container.current.parentElement);
-		return () => obs.disconnect();
-	}, [container, observer]);
-
-	return (
-		<div {...containerProps} ref={container}>
-			{children}
-		</div>
-	);
+const TypeToColor = {
+	[ThingType.Cloud]: 'lightblue',
+	[ThingType.RainCloud]: 'slategrey',
+	[ThingType.Root]: 'brown',
+	[ThingType.Seed]: 'orange',
+	[ThingType.Water]: 'blue',
 };
 
+
+// ## Canvas Renderer
+const renderToContext = (ctx: CanvasRenderingContext2D, xform: ZoomTransform, state: SimState, rect: DOMRect) => {
+	ctx?.clearRect(0, 0, rect.width, rect.height);
+	ctx?.save();
+	ctx?.translate(xform.x, xform.y);
+	ctx?.scale(xform.k, xform.k);
+	for (const [[x, y], things] of state.things) {
+		for (const thing of things) {
+			ctx.fillStyle = TypeToColor[thing.type];
+			ctx.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
+		}
+	}
+	ctx.restore();
+};
+
+
+// ## SVG Renderer
+const renderToSvg = (root: Element, state: SimState) => {
+	return d3select(root)
+		.selectAll('rect')
+		.data([...state.things.values()].flat())
+		// Everything is a rectangle I guess
+		.join('rect')
+			.attr('x', thing => thing.pos[0] * (SCALE + 1) - HALF_SCALE)
+			.attr('y', thing => thing.pos[1] * (SCALE + 1) - HALF_SCALE)
+			.attr('width', SCALE)
+			.attr('height', SCALE)
+			.attr('fill', thing => TypeToColor[thing.type]);
+};
+
+
+
+// ### Save zoom / render state
 const RENDER_SAVE = 'RENDER_SAVE';
 const debounceSaveZoom = fp.debounce((zoom) => {
 	sessionStorage.setItem(RENDER_SAVE, JSON.stringify(zoom));
@@ -71,6 +72,9 @@ const loadSaveZoom = () => {
 	}
 };
 
+
+
+// ## Control + Render types
 export type RenderController = {
 	center: () => void;
 }
@@ -79,6 +83,12 @@ export type RenderProps = {
 	onResize?: (rect: DOMRectReadOnly) => void;
 	onCtrl?: (ctrl: RenderController) => void;
 }
+
+
+
+
+
+// ## Canvas render setup + interaction
 export const CanvasRender: React.FC<RenderProps> = ({
 	state,
 	onResize = fp.noop,
@@ -113,17 +123,7 @@ export const CanvasRender: React.FC<RenderProps> = ({
 		}
 		const xform = transform ?? zoomIdentity;
 		const rect = canvas.current.getBoundingClientRect();
-		ctx?.clearRect(0, 0, rect.width, rect.height);
-		ctx?.save();
-		ctx?.translate(xform.x, xform.y);
-		ctx?.scale(xform.k, xform.k);
-		for (const [[x, y], things] of state.things) {
-			for (const thing of things) {
-				ctx.fillStyle = TypeToColor[thing.type];
-				ctx.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
-			}
-		}
-		ctx.restore();
+		renderToContext(ctx, xform, state, rect);
 	}, [state, transform]);
 
 	useEffect(() => {
@@ -141,14 +141,11 @@ export const CanvasRender: React.FC<RenderProps> = ({
 	);
 };
 
-const TypeToColor = {
-	[ThingType.Cloud]: 'lightblue',
-	[ThingType.RainCloud]: 'slategrey',
-	[ThingType.Root]: 'brown',
-	[ThingType.Seed]: 'orange',
-	[ThingType.Water]: 'blue',
-};
 
+
+
+
+// ## SVG render setup + interaction
 export const SvgRender: React.FC<RenderProps> = ({
 	state,
 	onResize = fp.noop,
@@ -221,16 +218,7 @@ export const SvgRender: React.FC<RenderProps> = ({
 		if (svg.current && state) {
 			const root = svg.current.getElementById('svg-root-transform');
 			if (root) {
-				d3select(root)
-					.selectAll('rect')
-					.data([...state.things.values()].flat())
-					// Everything is a rectangle I guess
-					.join('rect')
-						.attr('x', thing => thing.pos[0] * (SCALE + 1) - HALF_SCALE)
-						.attr('y', thing => thing.pos[1] * (SCALE + 1) - HALF_SCALE)
-						.attr('width', SCALE)
-						.attr('height', SCALE)
-						.attr('fill', thing => TypeToColor[thing.type]);
+				renderToSvg(root, state);
 			}
 		}
 	}, [state, transform]);
