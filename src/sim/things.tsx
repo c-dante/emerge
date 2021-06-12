@@ -65,9 +65,9 @@ export const removeThing = (thing: Thing, things: SimState['things']) => {
 export type Control = (self: Thing, state: SimState, delta: number) => void;
 
 // -------- Controls
+const DISTANCE = 2;
+const MAX_CELLS = (DISTANCE - 1) * 9;
 const absorbWater: Control = (self: Thing, state: SimState) => {
-	const DISTANCE = 2;
-	const MAX_CELLS = (DISTANCE - 1) * 9;
 	const nearestWater = state.things.queryValues(self.pos, 2, MAX_CELLS)
 		.flat()
 		.find(x => x.type === ThingType.Water);

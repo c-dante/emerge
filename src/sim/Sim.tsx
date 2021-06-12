@@ -1,7 +1,7 @@
 import React from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
-import { SvgRender } from './render';
+import { RenderController, CanvasRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
 
 // -- Sim
@@ -75,6 +75,7 @@ export type SimEltState = {
 	sim: SimState;
 	intervalRate: number;
 	canvasRect?: DOMRectReadOnly;
+	renderController?: RenderController;
 }
 export type SimProps = {};
 export class Sim extends React.Component<SimProps, SimEltState> {
@@ -82,22 +83,21 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 
 	constructor(initialProps: SimProps) {
 		super(initialProps);
-		this.state = {
+		const initialState = {
 			sim: emptyState(),
 			intervalRate: 1000,
 		};
-
 		const saved = sessionStorage.getItem(GAME_SAVE);
 		if (saved) {
 			try {
-				this.setState({
-					sim: deserializeState(saved),
-				});
+				initialState.sim = deserializeState(saved);
 			} catch (error) {
 				console.debug(saved);
 				console.warn('Failed to load json', error);
 			}
 		}
+
+		this.state = initialState;
 	}
 
 	componentDidMount() {
@@ -111,7 +111,7 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 			this.setState({
 				sim: { ...nextState },
 			});
-		}, 1000);
+		}, this.state.intervalRate);
 	}
 
 	componentWillUnmount() {
@@ -126,20 +126,35 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 			canvasRect: rect,
 		});
 	}
+	setCanvasDimsCb = this.setCanvasDims.bind(this);
+
+	setRenderCtrl(renderController: RenderController) {
+		this.setState({ renderController });
+	}
+	renderCtrlCb = this.setRenderCtrl.bind(this);
 
 	render() {
 		return (
 			<div className="sim-container">
 				<div className="sim-render-area">
-					{/* <CanvasRender state={this.state.sim} onResize={dims => this.setCanvasDims(dims)} /> */}
-					<SvgRender state={this.state.sim} onResize={dims => this.setCanvasDims(dims)} />
+					<CanvasRender
+						state={this.state.sim}
+						onResize={this.setCanvasDimsCb}
+						onCtrl={this.renderCtrlCb}
+					/>
+					{/* <SvgRender
+						state={this.state?.sim}
+						onResize={this.setCanvasDimsCb}
+						onCtrl={this.renderCtrlCb}
+					/> */}
 				</div>
 
 				<div className="sim-stats-footer">
-					<p>{this.state.sim.tick}</p>
+					<p>{this.state?.sim?.tick}</p>
 					<button onClick={() => this.setState({ sim: emptyState()} )}>Reset</button>
-					<p>Size: {this.state.canvasRect?.width} x {this.state.canvasRect?.height}</p>
-					{/* <button onClick={() => this.setState({ sim: emptyState()} )}>Center</button> */}
+					<p>Size: {this.state?.canvasRect?.width} x {this.state?.canvasRect?.height}</p>
+					<button onClick={() => this.state?.renderController?.center()}>Center</button>
+					<button onClick={() => console.log(this.state)}>Log</button>
 					{/* <label>
 						interval (ms)
 						<input type='text' value={this.intervalRate} />
