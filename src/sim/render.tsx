@@ -2,9 +2,10 @@ import fp from 'lodash';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { zoom as d3zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select as d3select } from 'd3-selection';
-import { SimState, ThingType } from './things';
+import { SimState, Thing, ThingType } from './things';
 import { SizedElement } from './SizedElement';
 import { Fps } from './fps';
+import type { Selection as D3Selection } from 'd3-selection';
 
 // Some shared render constants
 const PADDING = 1;
@@ -38,10 +39,30 @@ const renderToContext = (ctx: CanvasRenderingContext2D, xform: ZoomTransform, st
 
 
 // ## SVG Renderer
-const renderToSvg = (root: Element, state: SimState) => {
+type AnySelection = D3Selection<any, any, any, any>
+const renderToSvg = (root: Element, state: SimState, cache: WeakMap<Thing, AnySelection>) => {
+
+	//
+	// for (const things of state.things.values()) {
+	// 	for (const thing of things) {
+	// 		let g = cache.get(thing);
+	// 		if (!g) {
+	// 			g = d3select(root)
+	// 				.append('g');
+	// 		}
+
+	// 		g.attr('x', thing.pos[0] * (SCALE + 1) - HALF_SCALE)
+	// 			.attr('y', thing.pos[1] * (SCALE + 1) - HALF_SCALE)
+	// 			.attr('width', SCALE)
+	// 			.attr('height', SCALE)
+	// 			.attr('fill', TypeToColor[thing.type]);
+	// 	}
+	// }
+	// return;
+
 	return d3select(root)
 		.selectAll('rect')
-		.data([...state.things.values()].flat())
+		.data([...state.things.values()].map(x => fp.sample(x) as Thing))
 		// Everything is a rectangle I guess
 		.join('rect')
 			.attr('x', thing => thing.pos[0] * (SCALE + 1) - HALF_SCALE)
@@ -169,6 +190,7 @@ export const SvgRender: React.FC<RenderProps> = ({
 				debounceSaveZoom(evt.transform);
 			})
 	);
+	const cache = useRef(new WeakMap<Thing, AnySelection>());
 
 	const renderCtrl = useRef({
 		center: () => {
@@ -226,7 +248,7 @@ export const SvgRender: React.FC<RenderProps> = ({
 			const root = svg.current.getElementById('svg-root-transform');
 			if (root) {
 				fps?.zero();
-				renderToSvg(root, state);
+				renderToSvg(root, state, cache.current);
 				fps?.update();
 			}
 		}

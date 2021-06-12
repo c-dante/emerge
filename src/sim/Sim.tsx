@@ -1,7 +1,7 @@
 import React from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
-import { RenderController, CanvasRender } from './render';
+import { RenderController, CanvasRender, SvgRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
 import { Fps } from './fps';
 
@@ -169,18 +169,18 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 		return (
 			<div className="sim-container">
 				<div className="sim-render-area">
-					<CanvasRender
+					{/* <CanvasRender
 						state={this.state.sim}
 						onResize={this.setCanvasDimsCb}
 						onCtrl={this.renderCtrlCb}
 						fps={this.state.drawFps}
-					/>
-					{/* <SvgRender
+					/> */}
+					<SvgRender
 						state={this.state?.sim}
 						onResize={this.setCanvasDimsCb}
 						onCtrl={this.renderCtrlCb}
 						fps={this.state.drawFps}
-					/> */}
+					/>
 				</div>
 
 				<div className="sim-stats-footer">
