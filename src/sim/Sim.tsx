@@ -1,7 +1,7 @@
 import React from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
-import { CanvasRender, SvgRender } from './render';
+import { SvgRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
 
 // -- Sim
@@ -69,7 +69,8 @@ const emptyState = () => ({
 // 	</div>
 // );
 
-const STORAGE = 'SIM_STORAGE';
+const GAME_SAVE = 'SIM_STORAGE';
+// const SETTINGS_SAVE = 'SIM_SETTINGS';
 export type SimEltState = {
 	sim: SimState;
 	intervalRate: number;
@@ -86,10 +87,9 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 			intervalRate: 1000,
 		};
 
-		const saved = sessionStorage.getItem(STORAGE);
+		const saved = sessionStorage.getItem(GAME_SAVE);
 		if (saved) {
 			try {
-				console.log(saved);
 				this.setState({
 					sim: deserializeState(saved),
 				});
@@ -105,7 +105,7 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 			const nextState = advanceSim(this.state.sim, 1);
 
 			if (this.state.sim.tick % 10 === 0) {
-				sessionStorage.setItem(STORAGE, serializeState(nextState));
+				sessionStorage.setItem(GAME_SAVE, serializeState(nextState));
 			}
 
 			this.setState({
@@ -133,17 +133,13 @@ export class Sim extends React.Component<SimProps, SimEltState> {
 				<div className="sim-render-area">
 					{/* <CanvasRender state={this.state.sim} onResize={dims => this.setCanvasDims(dims)} /> */}
 					<SvgRender state={this.state.sim} onResize={dims => this.setCanvasDims(dims)} />
-					{/* {[...this.state.things.values()].flatMap((things, i) => (
-						things.map((thing, j) => (
-							<DisplayThing thing={thing} key={`${i},${j}`} />
-						))
-					))} */}
 				</div>
 
 				<div className="sim-stats-footer">
 					<p>{this.state.sim.tick}</p>
 					<button onClick={() => this.setState({ sim: emptyState()} )}>Reset</button>
 					<p>Size: {this.state.canvasRect?.width} x {this.state.canvasRect?.height}</p>
+					{/* <button onClick={() => this.setState({ sim: emptyState()} )}>Center</button> */}
 					{/* <label>
 						interval (ms)
 						<input type='text' value={this.intervalRate} />

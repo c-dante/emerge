@@ -51,6 +51,7 @@ const SizedElement: React.FC<SizedElementProps> = ({
 	);
 };
 
+
 export type RenderProps = {
 	state: SimState;
 	onResize?: (rect: DOMRectReadOnly) => void;
@@ -79,19 +80,26 @@ export const CanvasRender: React.FC<RenderProps> = ({
 	}, [setContainerSize, onResize]);
 
 	useEffect(() => {
-		if (canvas.current && state) {
-			const xform = transform ?? zoomIdentity;
-			const ctx = canvas.current.getContext('2d');
-			const rect = canvas.current.getBoundingClientRect();
-			ctx?.clearRect(0, 0, rect.width, rect.height);
-			ctx?.save();
-			ctx?.translate(xform.x, xform.y);
-			ctx?.scale(xform.k, xform.k);
-			for (const [[x, y], thing] of state.things) {
-				ctx?.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
-			}
-			ctx?.restore();
+		if (!canvas.current || !state) {
+			return;
 		}
+		const ctx = canvas.current.getContext('2d');
+		if (!ctx) {
+			return;
+		}
+		const xform = transform ?? zoomIdentity;
+		const rect = canvas.current.getBoundingClientRect();
+		ctx?.clearRect(0, 0, rect.width, rect.height);
+		ctx?.save();
+		ctx?.translate(xform.x, xform.y);
+		ctx?.scale(xform.k, xform.k);
+		for (const [[x, y], things] of state.things) {
+			for (const thing of things) {
+				ctx.fillStyle = TypeToColor[thing.type];
+				ctx.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
+			}
+		}
+		ctx.restore();
 	}, [state, transform]);
 
 	useEffect(() => {
@@ -116,18 +124,39 @@ const TypeToColor = {
 };
 
 
+const SVG_RENDER_SAVE = 'SVG_RENDER_SAVE';
+const debounceSaveZoom = fp.debounce((zoom) => {
+	sessionStorage.setItem(SVG_RENDER_SAVE, JSON.stringify(zoom));
+}, 250);
+const loadSaveZoom = () => {
+	const saved = sessionStorage.getItem(SVG_RENDER_SAVE);
+	if (!saved) {
+		return zoomIdentity;
+	}
+
+	try {
+		const args = JSON.parse(saved);
+		return zoomIdentity
+			.translate(args.x, args.y)
+			.scale(args.k);
+	} catch {
+		return zoomIdentity;
+	}
+};
+
 export const SvgRender: React.FC<RenderProps> = ({
 	state,
 	onResize = fp.noop,
 }) => {
 	const svg = useRef<SVGSVGElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 100, height: 100 });
-	const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
+	const [transform, setTransform] = useState<ZoomTransform>(loadSaveZoom());
 	const zoom = useRef(
 		d3zoom()
 			.scaleExtent([1, 100])
 			.on('zoom', (evt) => {
 				setTransform(evt.transform as ZoomTransform);
+				debounceSaveZoom(evt.transform);
 			})
 	);
 
@@ -163,7 +192,11 @@ export const SvgRender: React.FC<RenderProps> = ({
 
 	useEffect(() => {
 		if (svg.current && zoom.current) {
-			d3select(svg.current).call(zoom.current as any);
+			const initialTransform = sessionStorage.getItem(SVG_RENDER_SAVE);
+			console.log(initialTransform);
+			d3select(svg.current)
+				.call(zoom.current as any)
+				.call(zoom.current.transform as any, loadSaveZoom());
 		}
 	}, [svg, zoom]);
 
