@@ -1,10 +1,10 @@
 import './App.css';
-import { Sim } from './sim/Sim';
+import { SimFc } from './sim/Sim';
 
 function App() {
   return (
     <div className="App">
-      <Sim />
+      <SimFc />
     </div>
   );
 }

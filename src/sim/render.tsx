@@ -1,5 +1,6 @@
 import fp from 'lodash';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { zoom as d3zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select as d3select } from 'd3-selection';
 import { SimState, Thing, ThingType } from './things';
@@ -20,13 +21,35 @@ const TypeToColor = {
 	[ThingType.Water]: 'blue',
 };
 
+const renderCanvasGrid = (ctx: CanvasRenderingContext2D) => {
+	const GRID_SIZE = 100;
+	ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+	for (let x = -GRID_SIZE; x <= GRID_SIZE; x++) {
+		ctx.beginPath();
+		ctx.moveTo(x * SCALE - HALF_SCALE, -GRID_SIZE * SCALE - HALF_SCALE);
+		ctx.lineTo(x * SCALE - HALF_SCALE, GRID_SIZE * SCALE - HALF_SCALE);
+		ctx.stroke();
+		ctx.closePath();
+	}
+
+	ctx.strokeStyle = 'rgba(0, 0, 255, 0.2)';
+	for (let x = -GRID_SIZE; x <= GRID_SIZE; x++) {
+		ctx.beginPath();
+		ctx.moveTo(-GRID_SIZE * SCALE - HALF_SCALE, x * SCALE - HALF_SCALE);
+		ctx.lineTo(GRID_SIZE * SCALE - HALF_SCALE, x * SCALE - HALF_SCALE);
+		ctx.stroke();
+		ctx.closePath();
+	}
+};
+
 
 // ## Canvas Renderer
 const renderToContext = (ctx: CanvasRenderingContext2D, xform: ZoomTransform, state: SimState, rect: DOMRect) => {
-	ctx?.clearRect(0, 0, rect.width, rect.height);
-	ctx?.save();
-	ctx?.translate(xform.x, xform.y);
-	ctx?.scale(xform.k, xform.k);
+	ctx.clearRect(0, 0, rect.width, rect.height);
+	ctx.save();
+	ctx.translate(xform.x, xform.y);
+	ctx.scale(xform.k, xform.k);
+
 	for (const [[x, y], things] of state.things) {
 		const topThing = fp.sample(things);
 		if (topThing) {
@@ -34,6 +57,10 @@ const renderToContext = (ctx: CanvasRenderingContext2D, xform: ZoomTransform, st
 			ctx.fillRect(x * (SCALE + PADDING) - HALF_SCALE, y * (SCALE + PADDING) - HALF_SCALE, SCALE, SCALE);
 		}
 	}
+
+	// Render a grid
+	renderCanvasGrid(ctx);
+
 	ctx.restore();
 };
 
@@ -103,9 +130,11 @@ export type RenderController = {
 }
 export type RenderProps = {
 	state: SimState;
-	fps?: Fps;
+	drawFps?: Fps;
+	renderFps?: Fps;
 	onResize?: (rect: DOMRectReadOnly) => void;
 	onCtrl?: (ctrl: RenderController) => void;
+	onMouse?: (event: ReactMouseEvent, gamePos: [number, number]) => void;
 }
 
 
@@ -115,8 +144,10 @@ export type RenderProps = {
 // ## Canvas render setup + interaction
 export const CanvasRender: React.FC<RenderProps> = ({
 	state,
-	fps,
+	drawFps,
+	renderFps,
 	onResize = fp.noop,
+	onMouse = fp.noop,
 }) => {
 	const canvas = useRef<HTMLCanvasElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 100, height: 100 });
@@ -146,12 +177,13 @@ export const CanvasRender: React.FC<RenderProps> = ({
 		if (!ctx) {
 			return;
 		}
-		fps?.zero();
+		renderFps?.update();
+		drawFps?.zero();
 		const xform = transform ?? zoomIdentity;
 		const rect = canvas.current.getBoundingClientRect();
 		renderToContext(ctx, xform, state, rect);
-		fps?.update();
-	}, [state, transform, fps]);
+		drawFps?.update();
+	}, [state, transform, drawFps, renderFps]);
 
 	useEffect(() => {
 		if (canvas.current && zoom.current) {
@@ -161,9 +193,18 @@ export const CanvasRender: React.FC<RenderProps> = ({
 		}
 	}, [canvas, zoom]);
 
+	const mouseEvent = useCallback((e: ReactMouseEvent) => {
+		onMouse(e, transform.invert([e.clientX, e.clientY]));
+	}, [transform, onMouse]);
+
 	return (
 		<SizedElement onResize={onContainerSize}>
-			<canvas ref={canvas} width={containerSize.width} height={containerSize.height} />
+			<canvas
+				ref={canvas}
+				width={containerSize.width}
+				height={containerSize.height}
+				onMouseMove={mouseEvent}
+			/>
 		</SizedElement>
 	);
 };
@@ -175,7 +216,8 @@ export const CanvasRender: React.FC<RenderProps> = ({
 // ## SVG render setup + interaction
 export const SvgRender: React.FC<RenderProps> = ({
 	state,
-	fps,
+	drawFps,
+	renderFps,
 	onResize = fp.noop,
 	onCtrl = fp.noop,
 }) => {
@@ -247,12 +289,13 @@ export const SvgRender: React.FC<RenderProps> = ({
 		if (svg.current && state) {
 			const root = svg.current.getElementById('svg-root-transform');
 			if (root) {
-				fps?.zero();
+				renderFps?.update();
+				drawFps?.zero();
 				renderToSvg(root, state, cache.current);
-				fps?.update();
+				drawFps?.update();
 			}
 		}
-	}, [state, transform, fps]);
+	}, [state, transform, drawFps, renderFps]);
 
 	useEffect(() => {
 		if (svg.current && zoom.current) {

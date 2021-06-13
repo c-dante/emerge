@@ -1,4 +1,30 @@
-.flex-column {
-	display: flex;
-	flex-direction: column;
+.sim-render-area {
+
+}
+
+.sim-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sim-render-area {
+  overflow: auto;
+  flex: 1;
+}
+
+.sim-stats-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.sim-stats-footer > *:not(:last-child) {
+  margin-right: 10px;
+}
+
+.sim-container label > input {
+  margin: 0 5px;
 }

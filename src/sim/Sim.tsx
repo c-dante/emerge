@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent, ChangeEvent as ReactChangeEvent } from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
 import { RenderController, CanvasRender, SvgRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
 import { Fps } from './fps';
+import './Sim.css';
 
 // -- Sim
 export type SerializedSimState = string;
@@ -72,136 +74,109 @@ const emptyState = () => ({
 
 const GAME_SAVE = 'SIM_STORAGE';
 // const SETTINGS_SAVE = 'SIM_SETTINGS';
-export type SimEltState = {
-	sim: SimState;
-	intervalRate: number;
-	canvasRect?: DOMRectReadOnly;
-	renderController?: RenderController;
-	simFps: Fps;
-	renderFps: Fps;
-	drawFps: Fps;
-}
-export type SimProps = {};
-export class Sim extends React.Component<SimProps, SimEltState> {
-	interval: NodeJS.Timeout | undefined;
+export const SimFc: React.FC = () => {
+	const [saveFile] = useState(GAME_SAVE);
+	const [intervalRate, setIntervalRate] = useState(1000);
+	const [tick, setTick] = useState(0);
+	const [renderCtrl, setRenderCtrl] = useState<RenderController>();
+	const [canvasRect, setRenderRect] = useState<DOMRectReadOnly>();
 
-	constructor(initialProps: SimProps) {
-		super(initialProps);
-		const initialState = {
-			sim: emptyState(),
-			intervalRate: 1000,
-			simFps: new Fps(),
-			renderFps: new Fps(),
-			drawFps: new Fps(),
-		};
-		const saved = sessionStorage.getItem(GAME_SAVE);
+	const sim = useRef(emptyState());
+	const drawFps = useRef(new Fps());
+	const renderFps = useRef(new Fps());
+	const simFps = useRef(new Fps());
+
+	const validateInputCb = useCallback((e: ReactChangeEvent<HTMLInputElement>) => {
+		const interval = +e.target.value;
+		if (!isNaN(interval)) {
+			const newRate = Math.min(
+				Math.max(10, interval),
+				10000
+			);
+			setIntervalRate(newRate);
+		}
+	}, [setIntervalRate]);
+
+	useEffect(() => {
+		const saved = sessionStorage.getItem(saveFile);
 		if (saved) {
 			try {
-				initialState.sim = deserializeState(saved);
+				sim.current = deserializeState(saved);
+				setTick(sim.current.tick);
 			} catch (error) {
 				console.debug(saved);
 				console.warn('Failed to load json', error);
 			}
 		}
+	}, [saveFile, sim]);
 
-		this.state = initialState;
-	}
+	useEffect(() => {
+		const interval = setInterval(() => {
+			renderFps.current.update();
 
-	configureInterval(rate: number) {
-		if (this.interval !== undefined) {
-			clearInterval(this.interval);
-		}
+			simFps.current.zero();
+			sim.current = { ...advanceSim(sim.current, 1) };
+			simFps.current.update();
 
-		this.interval = setInterval(() => {
-			this.state.simFps.zero();
-			const nextState = advanceSim(this.state.sim, 1);
-			this.state.simFps.update();
-
-			if (this.state.sim.tick % 10 === 0) {
-				sessionStorage.setItem(GAME_SAVE, serializeState(nextState));
+			if (sim.current.tick % 10 === 0) {
+				sessionStorage.setItem(saveFile, serializeState(sim.current));
 			}
 
-			this.setState({
-				sim: { ...nextState },
-			});
-		}, rate);
-	}
+			setTick(sim.current.tick);
+		}, intervalRate);
 
-	componentDidMount() {
-		this.configureInterval(this.state.intervalRate);
-	}
+		return () => {
+			clearInterval(interval);
+		};
+	}, [saveFile, intervalRate, setIntervalRate, simFps]);
 
-	componentWillUnmount() {
-		if (this.interval !== undefined) {
-			clearInterval(this.interval);
-			this.interval = undefined;
-		}
-	}
+	const resetSim = useCallback(() => {
+		sim.current = emptyState();
+		setTick(sim.current.tick);
+	}, [sim]);
 
-	setCanvasDims(rect: DOMRectReadOnly) {
-		this.setState({
-			canvasRect: rect,
-		});
-	}
-	setCanvasDimsCb = this.setCanvasDims.bind(this);
+	return (
+		<div className="sim-container">
+			<div className="sim-render-area">
+				<CanvasRender
+					state={sim.current}
+					onResize={setRenderRect}
+					onCtrl={setRenderCtrl}
+					// onMouse={onGameMouseEventCb}
+					drawFps={drawFps.current}
+					renderFps={renderFps.current}
+				/>
+				{/* <SvgRender
+					state={sim.current}
+					onResize={setRenderRect}
+					onCtrl={setRenderCtrl}
+					drawFps={drawFps.current}
+					renderFps={renderFps.current}
+				/> */}
+			</div>
 
-	setRenderCtrl(renderController: RenderController) {
-		this.setState({ renderController });
-	}
-	renderCtrlCb = this.setRenderCtrl.bind(this);
-
-	setInterval(intervalStr: string) {
-		const interval = +intervalStr;
-		if (!isNaN(interval)) {
-			const intervalRate = Math.min(
-				Math.max(10, interval),
-				10000
-			);
-			this.setState({
-				intervalRate
-			});
-			this.configureInterval(intervalRate);
-		}
-	}
-
-	render() {
-		this.state.renderFps.update();
-		return (
-			<div className="sim-container">
-				<div className="sim-render-area">
-					{/* <CanvasRender
-						state={this.state.sim}
-						onResize={this.setCanvasDimsCb}
-						onCtrl={this.renderCtrlCb}
-						fps={this.state.drawFps}
-					/> */}
-					<SvgRender
-						state={this.state?.sim}
-						onResize={this.setCanvasDimsCb}
-						onCtrl={this.renderCtrlCb}
-						fps={this.state.drawFps}
+			<div className="sim-stats-footer">
+				<p>{tick}</p>
+				<button onClick={resetSim}>Reset</button>
+				<p>Size: {canvasRect?.width} x {canvasRect?.height}</p>
+				<button disabled={!renderCtrl} onClick={() => renderCtrl?.center()}>Center</button>
+				<button onClick={() => console.log({ saveFile, sim, canvasRect, renderCtrl, intervalRate })}>Log</button>
+				<label>
+					interval (ms)
+					<input
+						type='text'
+						value={intervalRate}
+						onChange={validateInputCb}
 					/>
+				</label>
+				<div style={{ width: '11em', overflow: 'hidden'}}>
+					<div>Render: {drawFps.current.rate.toFixed(0)} ms</div>
+					<div>Sim: {simFps.current.rate.toFixed(0)} ms</div>
 				</div>
-
-				<div className="sim-stats-footer">
-					<p>{this.state?.sim?.tick}</p>
-					<button onClick={() => this.setState({ sim: emptyState()} )}>Reset</button>
-					<p>Size: {this.state?.canvasRect?.width} x {this.state?.canvasRect?.height}</p>
-					<button onClick={() => this.state?.renderController?.center()}>Center</button>
-					<button onClick={() => console.log(this.state)}>Log</button>
-					<label>
-						interval (ms)
-						<input type='text' value={this.state.intervalRate} onChange={e => this.setInterval(e.target.value)} />
-					</label>
-					<div style={{ width: '11em', overflow: 'hidden'}}>
-						<div>Render: {this.state.drawFps.rate.toFixed(0)} ms</div>
-						<div>Sim: {this.state.simFps.rate.toFixed(0)} ms</div>
-					</div>
-					<div style={{ width: '11em', overflow: 'hidden'}}>
-						<div>FPS: {Math.round(this.state.renderFps.fps)} fps</div>
-					</div>
+				<div style={{ width: '11em', overflow: 'hidden'}}>
+					<div>FPS: {Math.round(renderFps.current.fps)} fps</div>
 				</div>
 			</div>
-		);
-	}
-}
+		</div>
+	);
+};
