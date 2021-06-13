@@ -75,6 +75,7 @@ const emptyState = () => ({
 const GAME_SAVE = 'SIM_STORAGE';
 // const SETTINGS_SAVE = 'SIM_SETTINGS';
 export const Sim: React.FC = () => {
+	// ------ State
 	const [saveFile] = useState(GAME_SAVE);
 	const [intervalRate, setIntervalRate] = useState(1000);
 	const [tick, setTick] = useState(0);
@@ -86,7 +87,9 @@ export const Sim: React.FC = () => {
 	const renderFps = useRef(new Fps());
 	const simFps = useRef(new Fps());
 
-	const validateInputCb = useCallback((e: ReactChangeEvent<HTMLInputElement>) => {
+
+	// ------ Callbacks
+	const validateInput = useCallback((e: ReactChangeEvent<HTMLInputElement>) => {
 		const interval = +e.target.value;
 		if (!isNaN(interval)) {
 			const newRate = Math.min(
@@ -97,6 +100,13 @@ export const Sim: React.FC = () => {
 		}
 	}, [setIntervalRate]);
 
+	const resetSim = useCallback(() => {
+		sim.current = emptyState();
+		setTick(sim.current.tick);
+	}, [sim]);
+
+
+	// ------ Effects
 	useEffect(() => {
 		const saved = sessionStorage.getItem(saveFile);
 		if (saved) {
@@ -130,29 +140,26 @@ export const Sim: React.FC = () => {
 		};
 	}, [saveFile, intervalRate, setIntervalRate, simFps]);
 
-	const resetSim = useCallback(() => {
-		sim.current = emptyState();
-		setTick(sim.current.tick);
-	}, [sim]);
+
 
 	return (
 		<div className="sim-container">
 			<div className="sim-render-area">
-				{/* <CanvasRender
+				<CanvasRender
 					state={sim.current}
 					onResize={setRenderRect}
 					onCtrl={setRenderCtrl}
 					// onMouse={onGameMouseEventCb}
 					drawFps={drawFps.current}
 					renderFps={renderFps.current}
-				/> */}
-				<SvgRender
+				/>
+				{/* <SvgRender
 					state={sim.current}
 					onResize={setRenderRect}
 					onCtrl={setRenderCtrl}
 					drawFps={drawFps.current}
 					renderFps={renderFps.current}
-				/>
+				/> */}
 			</div>
 
 			<div className="sim-stats-footer">
@@ -166,7 +173,7 @@ export const Sim: React.FC = () => {
 					<input
 						type='text'
 						value={intervalRate}
-						onChange={validateInputCb}
+						onChange={validateInput}
 					/>
 				</label>
 				<div style={{ width: '11em', overflow: 'hidden'}}>
