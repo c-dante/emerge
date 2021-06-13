@@ -74,7 +74,7 @@ const emptyState = () => ({
 
 const GAME_SAVE = 'SIM_STORAGE';
 // const SETTINGS_SAVE = 'SIM_SETTINGS';
-export const SimFc: React.FC = () => {
+export const Sim: React.FC = () => {
 	const [saveFile] = useState(GAME_SAVE);
 	const [intervalRate, setIntervalRate] = useState(1000);
 	const [tick, setTick] = useState(0);
@@ -138,21 +138,21 @@ export const SimFc: React.FC = () => {
 	return (
 		<div className="sim-container">
 			<div className="sim-render-area">
-				<CanvasRender
+				{/* <CanvasRender
 					state={sim.current}
 					onResize={setRenderRect}
 					onCtrl={setRenderCtrl}
 					// onMouse={onGameMouseEventCb}
 					drawFps={drawFps.current}
 					renderFps={renderFps.current}
-				/>
-				{/* <SvgRender
+				/> */}
+				<SvgRender
 					state={sim.current}
 					onResize={setRenderRect}
 					onCtrl={setRenderCtrl}
 					drawFps={drawFps.current}
 					renderFps={renderFps.current}
-				/> */}
+				/>
 			</div>
 
 			<div className="sim-stats-footer">
