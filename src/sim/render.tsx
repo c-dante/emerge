@@ -204,6 +204,8 @@ export const CanvasRender: React.FC<RenderProps> = ({
 				width={containerSize.width}
 				height={containerSize.height}
 				onMouseMove={mouseEvent}
+				onMouseOver={mouseEvent}
+				onMouseOut={mouseEvent}
 			/>
 		</SizedElement>
 	);

@@ -5,3 +5,7 @@
   flex-direction: column;
   color: white;
 }
+
+body {
+  overflow: hidden;
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ChangeEvent as ReactChangeEvent } from 'react';
 import fp from 'lodash/fp';
 import { KdTreeMap } from '@thi.ng/geom-accel';
@@ -6,6 +6,8 @@ import { RenderController, CanvasRender, SvgRender } from './render';
 import { addThing, cloud, FixedControls, seed, SimState, Thing, water } from './things';
 import { Fps } from './fps';
 import './Sim.css';
+import { createPopper } from '@popperjs/core';
+import type { VirtualElement as PopperVirtualElement, Instance as PopperInstance } from '@popperjs/core';
 
 // -- Sim
 export type SerializedSimState = string;
@@ -86,7 +88,49 @@ export const Sim: React.FC = () => {
 	const drawFps = useRef(new Fps());
 	const renderFps = useRef(new Fps());
 	const simFps = useRef(new Fps());
+	const virtualRef = useRef<ClientRect>({
+		width: 0,
+		height: 0,
+		top: 0,
+		right: 0,
+		bottom: 0,
+		left: 0,
+	});
+	const popperElt = useRef<HTMLDivElement>(null);
+	const popper = useRef<PopperInstance | null>(null);
 
+	useEffect(() => {
+		if (popperElt.current) {
+			popper.current = createPopper({
+				getBoundingClientRect: () => virtualRef.current,
+			}, popperElt.current, {
+				placement: 'right-start',
+				modifiers: [
+					{
+						name: 'offset',
+						options: {
+							offset: [10, 20],
+						},
+					},
+					{
+						name: 'flip',
+						enabled: false,
+					},
+					{
+						name: 'preventOverflow',
+						options: {
+							tether: false,
+							altAxis: true,
+						},
+					},
+				],
+			});
+
+			return () => {
+				popper.current?.destroy();
+			};
+		}
+	}, [popperElt, virtualRef]);
 
 	// ------ Callbacks
 	const validateInput = useCallback((e: ReactChangeEvent<HTMLInputElement>) => {
@@ -104,6 +148,16 @@ export const Sim: React.FC = () => {
 		sim.current = emptyState();
 		setTick(sim.current.tick);
 	}, [sim]);
+
+	const onGameMouseEvent = useCallback((evt: ReactMouseEvent, gamePos: [number, number]) => {
+		if (popper.current) {
+			virtualRef.current.left = evt.pageX;
+			virtualRef.current.right = evt.pageX;
+			virtualRef.current.top = evt.pageY;
+			virtualRef.current.bottom = evt.pageY;
+			popper.current.update();
+		}
+	}, [virtualRef, popper]);
 
 
 	// ------ Effects
@@ -141,15 +195,20 @@ export const Sim: React.FC = () => {
 	}, [saveFile, intervalRate, setIntervalRate, simFps]);
 
 
-
 	return (
 		<div className="sim-container">
+			<div ref={popperElt}>
+				<div className='sim-tooltip'>
+					Hello World
+				</div>
+			</div>
+
 			<div className="sim-render-area">
 				<CanvasRender
 					state={sim.current}
 					onResize={setRenderRect}
 					onCtrl={setRenderCtrl}
-					// onMouse={onGameMouseEventCb}
+					onMouse={onGameMouseEvent}
 					drawFps={drawFps.current}
 					renderFps={renderFps.current}
 				/>
@@ -161,6 +220,7 @@ export const Sim: React.FC = () => {
 					renderFps={renderFps.current}
 				/> */}
 			</div>
+
 
 			<div className="sim-stats-footer">
 				<p>{tick}</p>

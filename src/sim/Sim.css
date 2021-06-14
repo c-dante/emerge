@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+	overflow: hidden;
 }
 
 .sim-render-area {
@@ -27,4 +28,14 @@
 
 .sim-container label > input {
   margin: 0 5px;
+}
+
+.sim-tooltip {
+	background: #333;
+	color: white;
+	font-weight: bold;
+	padding: 4px 8px;
+	font-size: 13px;
+	border-radius: 4px;
+	pointer-events: none;
 }
